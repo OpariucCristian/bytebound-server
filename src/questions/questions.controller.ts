@@ -24,6 +24,7 @@ import {
   CheckAnswerResultDto,
 } from './dto/question-pool.dto';
 
+@UseGuards(AuthGuard('jwt'))
 @Controller('api/questions')
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}

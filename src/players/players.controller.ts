@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Controller,
   Get,
@@ -17,41 +18,27 @@ import { AuthGuard } from '@nestjs/passport';
 import { PlayersService } from './players.service';
 import { PlayerDto, UpdatePlayerDto } from './dto/player.dto';
 import type { Request } from 'express';
+import { getUserIdFromToken } from 'src/utils/utils';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('api/players')
 export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}
 
-  private getUserIdFromToken(req: Request): string | undefined {
-    const user = req.user as Record<string, unknown> | undefined;
-    return typeof user?.sub === 'string' ? user.sub : undefined;
-  }
-
-  private getUserNameFromToken(req: Request): string | undefined {
-    const user = req.user as Record<string, unknown> | undefined;
-    const userMetadata = user?.user_metadata as
-      | Record<string, unknown>
-      | undefined;
-    return typeof userMetadata?.username === 'string'
-      ? userMetadata.username
-      : undefined;
-  }
-
-  @Get()
-  async getPlayers(): Promise<PlayerDto[]> {
-    try {
-      return await this.playersService.getAllPlayers();
-    } catch {
-      throw new InternalServerErrorException(
-        'An error occurred while retrieving players',
-      );
-    }
-  }
+  // @Get()
+  // async getPlayers(): Promise<PlayerDto[]> {
+  //   try {
+  //     return await this.playersService.getAllPlayers();
+  //   } catch {
+  //     throw new InternalServerErrorException(
+  //       'An error occurred while retrieving players',
+  //     );
+  //   }
+  // }
 
   @Get('me')
   async getCurrentPlayer(@Req() req: Request): Promise<PlayerDto> {
-    const userId = this.getUserIdFromToken(req);
+    const userId = getUserIdFromToken(req);
     if (!userId) {
       throw new UnauthorizedException('User ID not found in token');
     }
@@ -65,50 +52,50 @@ export class PlayersController {
     return player;
   }
 
-  @Get(':uid')
-  async getPlayer(
-    @Param('uid') uid: string,
-    @Req() req: Request,
-  ): Promise<PlayerDto> {
-    try {
-      let player = await this.playersService.getPlayerByUid(uid);
-      if (!player) {
-        const userName = this.getUserNameFromToken(req);
+  // @Get(':uid')
+  // async getPlayer(
+  //   @Param('uid') uid: string,
+  //   @Req() req: Request,
+  // ): Promise<PlayerDto> {
+  //   try {
+  //     let player = await this.playersService.getPlayerByUid(uid);
+  //     if (!player) {
+  //       const userName = this.getUserNameFromToken(req);
 
-        if (!userName) {
-          throw new InternalServerErrorException(
-            'An error occurred while retrieving the player',
-          );
-        }
+  //       if (!userName) {
+  //         throw new InternalServerErrorException(
+  //           'An error occurred while retrieving the player',
+  //         );
+  //       }
 
-        player = await this.playersService.createPlayer(uid, userName);
-      }
-      return player;
-    } catch {
-      throw new InternalServerErrorException(
-        'An error occurred while retrieving the player',
-      );
-    }
-  }
+  //       player = await this.playersService.createPlayer(uid, userName);
+  //     }
+  //     return player;
+  //   } catch {
+  //     throw new InternalServerErrorException(
+  //       'An error occurred while retrieving the player',
+  //     );
+  //   }
+  // }
 
-  @Put(':uid')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async updatePlayer(
-    @Param('uid') uid: string,
-    @Body() dto: UpdatePlayerDto,
-  ): Promise<void> {
-    const success = await this.playersService.updatePlayer(uid, dto);
-    if (!success) {
-      throw new NotFoundException(`Player with UID ${uid} not found`);
-    }
-  }
+  // @Put(':uid')
+  // @HttpCode(HttpStatus.NO_CONTENT)
+  // async updatePlayer(
+  //   @Param('uid') uid: string,
+  //   @Body() dto: UpdatePlayerDto,
+  // ): Promise<void> {
+  //   const success = await this.playersService.updatePlayer(uid, dto);
+  //   if (!success) {
+  //     throw new NotFoundException(`Player with UID ${uid} not found`);
+  //   }
+  // }
 
-  @Delete(':uid')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deletePlayer(@Param('uid') uid: string): Promise<void> {
-    const success = await this.playersService.deletePlayer(uid);
-    if (!success) {
-      throw new NotFoundException(`Player with UID ${uid} not found`);
-    }
-  }
+  // @Delete(':uid')
+  // @HttpCode(HttpStatus.NO_CONTENT)
+  // async deletePlayer(@Param('uid') uid: string): Promise<void> {
+  //   const success = await this.playersService.deletePlayer(uid);
+  //   if (!success) {
+  //     throw new NotFoundException(`Player with UID ${uid} not found`);
+  //   }
+  // }
 }

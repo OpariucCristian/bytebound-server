@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Controller,
   Get,
@@ -23,15 +24,12 @@ import { ReadGameStatsDto } from './dto/game-stats.dto';
 import type { Request } from 'express';
 import { Game } from './entities/game.entity';
 import { GameStats } from './entities/game-stats.entity';
+import { getUserIdFromToken } from 'src/utils/utils';
 
+@UseGuards(AuthGuard('jwt'))
 @Controller('api/games')
 export class GamesController {
   constructor(private readonly gamesService: GamesService) {}
-
-  private getUserId(req: Request): string | undefined {
-    const user = req.user as Record<string, unknown> | undefined;
-    return typeof user?.sub === 'string' ? user.sub : undefined;
-  }
 
   // POST: api/games/gameInstance/new
   @Post('gameInstance/new')
@@ -41,7 +39,7 @@ export class GamesController {
     @Req() req: Request,
   ): Promise<ReadNewGameDto> {
     try {
-      const userId = this.getUserId(req);
+      const userId = getUserIdFromToken(req);
       if (!userId) {
         throw new UnauthorizedException('User ID not found in claims');
       }
@@ -62,9 +60,18 @@ export class GamesController {
 
   // GET: api/games/gameInstance/nextQuestion/:gameId
   @Get('gameInstance/nextQuestion/:gameId')
-  async getNextQuestion(@Param('gameId', ParseUUIDPipe) gameId: string) {
+  async getNextQuestion(
+    @Param('gameId', ParseUUIDPipe) gameId: string,
+    @Req() req: Request,
+  ) {
     try {
-      return await this.gamesService.getNextQuestion(gameId);
+      const userId = getUserIdFromToken(req);
+
+      if (!userId) {
+        throw new UnauthorizedException('Player not found');
+      }
+
+      return await this.gamesService.getNextQuestion(gameId, userId);
     } catch (err) {
       if (
         err instanceof NotFoundException ||
@@ -82,9 +89,16 @@ export class GamesController {
   async checkAnswer(
     @Param('gameId', ParseUUIDPipe) gameId: string,
     @Body() body: { answerId: string },
+    @Req() req: Request,
   ): Promise<boolean> {
     try {
-      return await this.gamesService.checkAnswer(gameId, body.answerId);
+      const userId = getUserIdFromToken(req);
+
+      if (!userId) {
+        throw new UnauthorizedException('Player not found');
+      }
+
+      return await this.gamesService.checkAnswer(gameId, body.answerId, userId);
     } catch (err) {
       if (
         err instanceof NotFoundException ||
@@ -101,9 +115,15 @@ export class GamesController {
   @Post('gameInstance/timeoutQuestion/:gameId')
   async timeoutQuestion(
     @Param('gameId', ParseUUIDPipe) gameId: string,
+    @Req() req: Request,
   ): Promise<boolean> {
     try {
-      return await this.gamesService.timeoutQuestion(gameId);
+      const userId = getUserIdFromToken(req);
+
+      if (!userId) {
+        throw new UnauthorizedException('Player not found');
+      }
+      return await this.gamesService.timeoutQuestion(gameId, userId);
     } catch (err) {
       if (
         err instanceof NotFoundException ||
@@ -124,7 +144,7 @@ export class GamesController {
     @Req() req: Request,
   ): Promise<ReadGameStatsDto> {
     try {
-      const userId = this.getUserId(req);
+      const userId = getUserIdFromToken(req);
       if (!userId) {
         throw new UnauthorizedException('User ID not found in claims');
       }
@@ -149,42 +169,42 @@ export class GamesController {
     return this.gamesService.getScoreboard(page);
   }
 
-  // GET: api/games
-  @Get()
-  async getGames(): Promise<Game[]> {
-    return this.gamesService.getAllGames();
-  }
+  // // GET: api/games
+  // @Get()
+  // async getGames(): Promise<Game[]> {
+  //   return this.gamesService.getAllGames();
+  // }
 
-  // GET: api/games/:id
-  @Get(':id')
-  async getGame(@Param('id', ParseUUIDPipe) id: string): Promise<Game> {
-    const game = await this.gamesService.getGameById(id);
-    if (!game) {
-      throw new NotFoundException();
-    }
-    return game;
-  }
+  // // GET: api/games/:id
+  // @Get(':id')
+  // async getGame(@Param('id', ParseUUIDPipe) id: string): Promise<Game> {
+  //   const game = await this.gamesService.getGameById(id);
+  //   if (!game) {
+  //     throw new NotFoundException();
+  //   }
+  //   return game;
+  // }
 
-  // PUT: api/games/:id
-  @Put(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async putGame(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() game: Game,
-  ): Promise<void> {
-    const success = await this.gamesService.updateGame(id, game);
-    if (!success) {
-      throw new BadRequestException();
-    }
-  }
+  // // PUT: api/games/:id
+  // @Put(':id')
+  // @HttpCode(HttpStatus.NO_CONTENT)
+  // async putGame(
+  //   @Param('id', ParseUUIDPipe) id: string,
+  //   @Body() game: Game,
+  // ): Promise<void> {
+  //   const success = await this.gamesService.updateGame(id, game);
+  //   if (!success) {
+  //     throw new BadRequestException();
+  //   }
+  // }
 
-  // DELETE: api/games/:id
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteGame(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    const success = await this.gamesService.deleteGame(id);
-    if (!success) {
-      throw new NotFoundException();
-    }
-  }
+  // // DELETE: api/games/:id
+  // @Delete(':id')
+  // @HttpCode(HttpStatus.NO_CONTENT)
+  // async deleteGame(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+  //   const success = await this.gamesService.deleteGame(id);
+  //   if (!success) {
+  //     throw new NotFoundException();
+  //   }
+  // }
 }

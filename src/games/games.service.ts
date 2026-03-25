@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -149,14 +150,21 @@ export class GamesService {
     };
   }
 
-  async getNextQuestion(gameId: string): Promise<QuestionPoolDto> {
+  async getNextQuestion(
+    gameId: string,
+    userId: string,
+  ): Promise<QuestionPoolDto> {
     const currentGame = await this.gameRepo.findOne({
       where: { id: gameId },
     });
     if (!currentGame) {
       throw new NotFoundException(`Could not find game with id ${gameId}`);
     }
-
+    if (currentGame.playerId !== userId) {
+      throw new UnauthorizedException(
+        "The player aksed for a question of a game they're not playing",
+      );
+    }
     const currentGameStats = await this.gameStatsRepo.findOne({
       where: { gameId: currentGame.id },
     });
@@ -239,7 +247,11 @@ export class GamesService {
     return this.toQuestionDto(nextQuestion, currentGame, isDifficultyChange);
   }
 
-  async checkAnswer(gameId: string, answerId: string): Promise<boolean> {
+  async checkAnswer(
+    gameId: string,
+    answerId: string,
+    userId: string,
+  ): Promise<boolean> {
     const answer = await this.answerRepo.findOne({
       where: { id: answerId },
     });
@@ -247,6 +259,12 @@ export class GamesService {
       where: { id: gameId },
       relations: ['gameStats'],
     });
+
+    if (game?.playerId !== userId) {
+      throw new UnauthorizedException(
+        "The player checked an answer for a game they're not playing",
+      );
+    }
 
     if (!answer) {
       throw new NotFoundException(`Could not find answer with id ${answerId}`);
@@ -297,7 +315,7 @@ export class GamesService {
     return isTimeout ? false : (answer.isCorrect ?? false);
   }
 
-  async timeoutQuestion(gameId: string): Promise<boolean> {
+  async timeoutQuestion(gameId: string, userId: string): Promise<boolean> {
     const currentGame = await this.gameRepo.findOne({
       where: { id: gameId },
       relations: ['gameStats'],
@@ -305,6 +323,12 @@ export class GamesService {
 
     if (!currentGame || !currentGame.gameStats) {
       throw new NotFoundException('Game or game stats not found');
+    }
+
+    if (currentGame?.playerId !== userId) {
+      throw new UnauthorizedException(
+        "The player timed out a question for a game they're not playing",
+      );
     }
 
     currentGame.isCurrentQuestionAnswered = true;
