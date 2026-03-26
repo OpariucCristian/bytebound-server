@@ -18,7 +18,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { PlayersService } from './players.service';
 import { PlayerDto, UpdatePlayerDto } from './dto/player.dto';
 import type { Request } from 'express';
-import { getUserIdFromToken } from 'src/utils/utils';
+import { getUserIdFromToken, getUserNameFromToken } from 'src/utils/utils';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('api/players')
@@ -52,31 +52,32 @@ export class PlayersController {
     return player;
   }
 
-  // @Get(':uid')
-  // async getPlayer(
-  //   @Param('uid') uid: string,
-  //   @Req() req: Request,
-  // ): Promise<PlayerDto> {
-  //   try {
-  //     let player = await this.playersService.getPlayerByUid(uid);
-  //     if (!player) {
-  //       const userName = this.getUserNameFromToken(req);
+  @Get()
+  async getPlayer(@Req() req: Request): Promise<PlayerDto> {
+    try {
+      const userId = getUserIdFromToken(req);
+      if (!userId) {
+        throw new UnauthorizedException('Player not found');
+      }
+      let player = await this.playersService.getPlayerByUid(userId);
+      if (!player) {
+        const userName = getUserNameFromToken(req);
 
-  //       if (!userName) {
-  //         throw new InternalServerErrorException(
-  //           'An error occurred while retrieving the player',
-  //         );
-  //       }
+        if (!userName) {
+          throw new InternalServerErrorException(
+            'An error occurred while retrieving the player',
+          );
+        }
 
-  //       player = await this.playersService.createPlayer(uid, userName);
-  //     }
-  //     return player;
-  //   } catch {
-  //     throw new InternalServerErrorException(
-  //       'An error occurred while retrieving the player',
-  //     );
-  //   }
-  // }
+        player = await this.playersService.createPlayer(userId, userName);
+      }
+      return player;
+    } catch {
+      throw new InternalServerErrorException(
+        'An error occurred while retrieving the player',
+      );
+    }
+  }
 
   // @Put(':uid')
   // @HttpCode(HttpStatus.NO_CONTENT)
