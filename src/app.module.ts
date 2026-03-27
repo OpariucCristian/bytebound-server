@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
+import { HeroesModule } from './heroes/heroes.module';
 import { PlayersModule } from './players/players.module';
 import { LevelsModule } from './levels/levels.module';
 import { QuestionsModule } from './questions/questions.module';
@@ -26,6 +27,7 @@ import { GamesModule } from './games/games.module';
       }),
     }),
     AuthModule,
+    HeroesModule,
     PlayersModule,
     LevelsModule,
     QuestionsModule,

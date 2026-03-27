@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Level } from '../../levels/entities/level.entity';
 import { Game } from '../../games/entities/game.entity';
+import { Hero } from 'src/heroes/entities/hero.entity';
 
 @Entity('Player')
 export class Player {
@@ -29,6 +30,10 @@ export class Player {
 
   @Column({ name: 'user_name', type: 'text' })
   userName: string;
+
+  @ManyToOne(() => Hero, (h) => h.players)
+  @JoinColumn({ name: 'hero_id' })
+  heroNavigation: Hero;
 
   @OneToMany(() => Game, (g) => g.player)
   games: Game[];

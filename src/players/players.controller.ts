@@ -13,6 +13,7 @@ import {
   NotFoundException,
   UnauthorizedException,
   InternalServerErrorException,
+  Patch,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PlayersService } from './players.service';
@@ -24,17 +25,6 @@ import { getUserIdFromToken, getUserNameFromToken } from 'src/utils/utils';
 @Controller('api/players')
 export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}
-
-  // @Get()
-  // async getPlayers(): Promise<PlayerDto[]> {
-  //   try {
-  //     return await this.playersService.getAllPlayers();
-  //   } catch {
-  //     throw new InternalServerErrorException(
-  //       'An error occurred while retrieving players',
-  //     );
-  //   }
-  // }
 
   @Get('me')
   async getCurrentPlayer(@Req() req: Request): Promise<PlayerDto> {
@@ -77,6 +67,17 @@ export class PlayersController {
         'An error occurred while retrieving the player',
       );
     }
+  }
+
+  @Patch('/hero/:heroId')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async assignHero(@Req() req: Request, @Param('heroId') heroId: string) {
+    const userId = getUserIdFromToken(req);
+    if (!userId) {
+      throw new UnauthorizedException('User ID not found in token');
+    }
+
+    await this.playersService.assignHero(heroId, userId);
   }
 
   // @Put(':uid')
