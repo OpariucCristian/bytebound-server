@@ -1,9 +1,8 @@
-import { Player } from 'src/players/entities/player.entity';
+import { Game } from 'src/games/entities/game.entity';
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { HeroSkill } from './hero-skill.entity';
 
-@Entity('Hero')
-export class Hero {
+@Entity('Enemy')
+export class Enemy {
   @PrimaryGeneratedColumn('uuid', { name: 'id' })
   id: string;
 
@@ -23,15 +22,12 @@ export class Hero {
   @Column({ name: 'base_attack', type: 'int' })
   baseAttack: number | null;
 
-  @Column({ name: 'description', type: 'text' })
-  description: string | null;
+  @Column({ name: 'difficulty', type: 'int' })
+  difficulty: number | null;
 
   @Column({ name: 'sprite_key', type: 'uuid' })
   spriteKey: string | null;
 
-  @OneToMany(() => Player, (p) => p.heroNavigation)
-  players: Player[];
-
-  @OneToMany(() => HeroSkill, (s) => s.hero)
-  skills: HeroSkill[];
+  @OneToMany(() => Game, (g) => g.enemyNavigation)
+  games: Game[];
 }

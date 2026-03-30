@@ -22,8 +22,8 @@ import {
   QuestionPoolAnswerDto,
 } from './dto/game.dto';
 import { ReadGameStatsDto } from './dto/game-stats.dto';
-import { DifficultyHandler } from './handlers/difficulty.handler';
 import { v4 as uuidv4 } from 'uuid';
+import { Enemy } from 'src/enemies/entities/enemy.entity';
 
 @Injectable()
 export class GamesService {
@@ -44,6 +44,8 @@ export class GamesService {
     private readonly playerRepo: Repository<Player>,
     @InjectRepository(Level)
     private readonly levelRepo: Repository<Level>,
+    @InjectRepository(Enemy)
+    private readonly enemyRepo: Repository<Enemy>,
   ) {}
 
   private toQuestionDto(
@@ -66,6 +68,7 @@ export class GamesService {
           text: a.text,
         }),
       ),
+      enemy: isDifficultyChange ? (game?.enemyNavigation ?? null) : null,
     };
   }
 
@@ -101,6 +104,16 @@ export class GamesService {
     const randomIndex = Math.floor(Math.random() * availableQuestions.length);
     const firstQuestion = availableQuestions[randomIndex];
 
+    const firstEnemy = await this.enemyRepo.findOne({
+      where: { difficulty: dto.difficulty },
+    });
+
+    if (!firstEnemy || !firstEnemy.baseHealth) {
+      throw new NotFoundException(
+        `Failed to fetch an enemy of difficulty ${dto.difficulty}`,
+      );
+    }
+
     const gameId = uuidv4();
 
     const newGame = this.gameRepo.create({
@@ -116,6 +129,9 @@ export class GamesService {
       currentQuestionTimestamp: new Date(),
       questionSeconds: 15,
       playerLives: 3,
+      enemyLives: firstEnemy.baseHealth,
+      enemyNavigation: firstEnemy,
+      xpGained: 0,
     });
 
     const newStats = this.gameStatsRepo.create({
@@ -142,11 +158,13 @@ export class GamesService {
       type: newGame.type,
       category: newGame.category,
       currentQuestionId: newGame.currentQuestionId,
-      difficulty: Number(newGame.difficulty),
+      difficulty: newGame.difficulty,
       gameState: newGame.gameState,
       playerId: newGame.playerId,
       firstQuestion: this.toQuestionDto(firstQuestion, newGame),
       playerLives: newGame.playerLives,
+      enemyLives: newGame.enemyNavigation.baseHealth ?? 5,
+      enemy: newGame.enemyNavigation,
     };
   }
 
@@ -165,9 +183,6 @@ export class GamesService {
         "The player aksed for a question of a game they're not playing",
       );
     }
-    const currentGameStats = await this.gameStatsRepo.findOne({
-      where: { gameId: currentGame.id },
-    });
 
     if (!currentGame.isCurrentQuestionAnswered) {
       throw new BadRequestException(
@@ -178,13 +193,24 @@ export class GamesService {
       throw new BadRequestException('Player already lost the game');
     }
 
-    const previousDifficulty = Number(currentGame.difficulty);
-    currentGame.difficulty =
-      DifficultyHandler.getDifficultyByCorrectQuestionsAsked(
-        currentGameStats!.correctAnswers,
-      );
-    const isDifficultyChange =
-      previousDifficulty !== Number(currentGame.difficulty);
+    let isDifficultyChange = false;
+    console.log('Enemy lives:', currentGame.enemyLives);
+    if (currentGame.enemyLives <= 0) {
+      console.log('current difficulty to search', currentGame.difficulty + 1);
+      const newEnemy = await this.enemyRepo.findOne({
+        where: { difficulty: currentGame.difficulty + 1 },
+      });
+
+      if (newEnemy && newEnemy.baseHealth && newEnemy.difficulty) {
+        currentGame.enemyNavigation = newEnemy;
+        currentGame.enemyLives = newEnemy?.baseHealth;
+        currentGame.difficulty = newEnemy?.difficulty;
+      } else {
+        throw new NotFoundException('Failed to find enemy for next difficulty');
+      }
+
+      isDifficultyChange = true;
+    }
 
     // Get already asked question IDs for this game
     const askedQuestions = await this.gameQuestionRepo.find({
@@ -260,6 +286,11 @@ export class GamesService {
       relations: ['gameStats'],
     });
 
+    const player = await this.playerRepo.findOne({
+      where: { uid: userId },
+      relations: ['heroNavigation'],
+    });
+
     if (game?.playerId !== userId) {
       throw new UnauthorizedException(
         "The player checked an answer for a game they're not playing",
@@ -304,9 +335,12 @@ export class GamesService {
         await this.finishGame(game);
       }
     } else {
-      stats.xpGained = Number(stats.xpGained) + 75;
+      stats.xpGained = stats.xpGained + 75;
       stats.correctAnswers += 1;
       stats.correctAnswersStreak += 1;
+
+      game.enemyLives =
+        game.enemyLives - (player?.heroNavigation?.baseAttack ?? 1);
     }
 
     await this.gameStatsRepo.save(stats);
@@ -382,28 +416,6 @@ export class GamesService {
     return game.gameStats;
   }
 
-  // CRUD endpoints (direct DB access like .NET controller)
-  async getAllGames(): Promise<Game[]> {
-    return this.gameRepo.find();
-  }
-
-  async getGameById(id: string): Promise<Game | null> {
-    return this.gameRepo.findOneBy({ id });
-  }
-
-  async updateGame(id: string, game: Game): Promise<boolean> {
-    if (id !== game.id) return false;
-    await this.gameRepo.save(game);
-    return true;
-  }
-
-  async deleteGame(id: string): Promise<boolean> {
-    const game = await this.gameRepo.findOneBy({ id });
-    if (!game) return false;
-    await this.gameRepo.remove(game);
-    return true;
-  }
-
   async getScoreboard(page: number = 0): Promise<GameStats[]> {
     const scoreboard = await this.gameStatsRepo.find({
       take: 10,
@@ -421,25 +433,25 @@ export class GamesService {
     });
 
     let currentPlayerXp = Number(player.xp);
-    let xpGained = Number(game.gameStats?.xpGained ?? 0);
+    let xpGained = game.gameStats?.xpGained ?? 0;
 
     let playerCurrentLevel = await this.levelRepo.findOneOrFail({
-      where: { lvl: Number(player.lvl) },
+      where: { lvl: player.lvl },
     });
 
     while (xpGained > 0) {
-      const neededXp = Number(playerCurrentLevel.neededXp ?? 0);
+      const neededXp = playerCurrentLevel.neededXp ?? 0;
       if (xpGained >= neededXp - currentPlayerXp) {
         xpGained -= neededXp - currentPlayerXp;
         const nextLevel = await this.levelRepo.findOneOrFail({
-          where: { lvl: Number(player.lvl) + 1 },
+          where: { lvl: player.lvl + 1 },
         });
-        player.lvl = Number(nextLevel.lvl);
+        player.lvl = nextLevel.lvl;
         player.xp = 0;
         currentPlayerXp = 0;
         playerCurrentLevel = nextLevel;
       } else {
-        player.xp = Number(player.xp) + xpGained;
+        player.xp = player.xp + xpGained;
         xpGained = 0;
       }
     }

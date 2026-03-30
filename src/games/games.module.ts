@@ -9,6 +9,7 @@ import { Player } from '../players/entities/player.entity';
 import { Level } from '../levels/entities/level.entity';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
+import { Enemy } from 'src/enemies/entities/enemy.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { GamesController } from './games.controller';
       QuestionPoolAnswer,
       Player,
       Level,
+      Enemy,
     ]),
   ],
   controllers: [GamesController],
