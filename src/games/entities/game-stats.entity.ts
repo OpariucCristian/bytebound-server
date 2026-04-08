@@ -29,7 +29,7 @@ export class GameStats {
   @Column({ name: 'wrong_answers', type: 'int', default: 0 })
   wrongAnswers: number;
 
-  @Column({ name: 'xp_gained', type: 'bigint', default: 0 })
+  @Column({ name: 'xp_gained', type: 'int', default: 0 })
   xpGained: number;
 
   @Column({

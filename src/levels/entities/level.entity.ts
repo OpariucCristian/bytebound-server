@@ -3,7 +3,7 @@ import { Player } from '../../players/entities/player.entity';
 
 @Entity('Level')
 export class Level {
-  @PrimaryColumn({ name: 'lvl', type: 'bigint' })
+  @PrimaryColumn({ name: 'lvl', type: 'int' })
   lvl: number;
 
   @Column({
@@ -13,7 +13,7 @@ export class Level {
   })
   createdAt: Date;
 
-  @Column({ name: 'neededXp', type: 'bigint', nullable: true, default: 0 })
+  @Column({ name: 'neededXp', type: 'int', nullable: true, default: 0 })
   neededXp: number | null;
 
   @OneToMany(() => Player, (p) => p.lvlNavigation)

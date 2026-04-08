@@ -21,7 +21,7 @@ export class QuestionPool {
   @Column({ name: 'category', type: 'text', nullable: true, default: 'dsa' })
   category: string | null;
 
-  @Column({ name: 'difficulty', type: 'bigint', nullable: true, default: 1 })
+  @Column({ name: 'difficulty', type: 'int', nullable: true, default: 1 })
   difficulty: number | null;
 
   @OneToMany(() => QuestionPoolAnswer, (a) => a.question, { cascade: true })
