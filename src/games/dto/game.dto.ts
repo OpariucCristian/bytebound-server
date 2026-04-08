@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { IsOptional, IsString, IsNumber } from 'class-validator';
+import { Enemy } from 'src/enemies/entities/enemy.entity';
 
 export class CreateNewGameDto {
   @IsOptional()
@@ -25,6 +26,8 @@ export class ReadNewGameDto {
   playerId: string;
   firstQuestion: QuestionPoolDto;
   playerLives: number;
+  enemyLives: number;
+  enemy: Enemy;
 }
 
 export class QuestionPoolDto {
@@ -36,6 +39,9 @@ export class QuestionPoolDto {
   questionSeconds?: number;
   isDifficultyChange?: boolean;
   answers: QuestionPoolAnswerDto[];
+  enemy: Enemy | null;
+  enemyLives?: number;
+  playerLives?: number;
 }
 
 export class QuestionPoolAnswerDto {

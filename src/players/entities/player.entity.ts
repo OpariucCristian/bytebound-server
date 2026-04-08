@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Level } from '../../levels/entities/level.entity';
 import { Game } from '../../games/entities/game.entity';
+import { Hero } from 'src/heroes/entities/hero.entity';
 
 @Entity('Player')
 export class Player {
@@ -21,14 +22,18 @@ export class Player {
   @PrimaryColumn({ name: 'uid', type: 'text' })
   uid: string;
 
-  @Column({ name: 'lvl', type: 'bigint', default: 1 })
+  @Column({ name: 'lvl', type: 'int', default: 1 })
   lvl: number;
 
-  @Column({ name: 'xp', type: 'bigint', default: 0 })
+  @Column({ name: 'xp', type: 'int', default: 0 })
   xp: number;
 
   @Column({ name: 'user_name', type: 'text' })
   userName: string;
+
+  @ManyToOne(() => Hero, (h) => h.players)
+  @JoinColumn({ name: 'hero_id' })
+  heroNavigation: Hero;
 
   @OneToMany(() => Game, (g) => g.player)
   games: Game[];
