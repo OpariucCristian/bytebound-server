@@ -20,7 +20,7 @@ export class Enemy {
   baseHealth: number | null;
 
   @Column({ name: 'base_attack', type: 'int' })
-  baseAttack: number | null;
+  baseAttack: number;
 
   @Column({ name: 'difficulty', type: 'int' })
   difficulty: number | null;

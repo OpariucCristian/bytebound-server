@@ -18,7 +18,7 @@ export class Hero {
   name: string | null;
 
   @Column({ name: 'base_health', type: 'int' })
-  baseHealth: number | null;
+  baseHealth: number;
 
   @Column({ name: 'base_attack', type: 'int' })
   baseAttack: number | null;

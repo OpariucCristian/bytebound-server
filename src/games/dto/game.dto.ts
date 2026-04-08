@@ -41,6 +41,7 @@ export class QuestionPoolDto {
   answers: QuestionPoolAnswerDto[];
   enemy: Enemy | null;
   enemyLives?: number;
+  playerLives?: number;
 }
 
 export class QuestionPoolAnswerDto {

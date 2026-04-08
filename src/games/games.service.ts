@@ -77,6 +77,14 @@ export class GamesService {
     dto: CreateNewGameDto,
     userId: string,
   ): Promise<ReadNewGameDto> {
+    const player = await this.playerRepo.findOne({
+      where: { uid: userId },
+      relations: ['heroNavigation'],
+    });
+
+    if (!player) {
+      throw new NotFoundException(`Could not find player`);
+    }
     // Cancel any active game for this player
     const runningGame = await this.gameRepo.findOne({
       where: { playerId: userId, gameState: GameState.Active },
@@ -129,7 +137,7 @@ export class GamesService {
       isCurrentQuestionAnswered: false,
       currentQuestionTimestamp: new Date(),
       questionSeconds: 15,
-      playerLives: 3,
+      playerLives: player.heroNavigation.baseHealth,
       enemyLives: firstEnemy.baseHealth,
       enemyNavigation: firstEnemy,
       xpGained: 0,
@@ -284,7 +292,7 @@ export class GamesService {
     });
     const game = await this.gameRepo.findOne({
       where: { id: gameId },
-      relations: ['gameStats'],
+      relations: ['gameStats', 'enemyNavigation'],
     });
 
     const player = await this.playerRepo.findOne({
@@ -323,7 +331,7 @@ export class GamesService {
     }
 
     if (!answer.isCorrect || isTimeout) {
-      game.playerLives -= 1;
+      game.playerLives -= game.enemyNavigation.baseAttack;
       stats.wrongAnswers += 1;
 
       if (stats.correctAnswersStreak > stats.correctAnswersStreakMax) {
