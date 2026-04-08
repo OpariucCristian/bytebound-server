@@ -69,6 +69,7 @@ export class GamesService {
         }),
       ),
       enemy: isDifficultyChange ? (game?.enemyNavigation ?? null) : null,
+      enemyLives: game?.enemyLives,
     };
   }
 

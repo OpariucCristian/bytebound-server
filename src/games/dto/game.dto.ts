@@ -40,6 +40,7 @@ export class QuestionPoolDto {
   isDifficultyChange?: boolean;
   answers: QuestionPoolAnswerDto[];
   enemy: Enemy | null;
+  enemyLives?: number;
 }
 
 export class QuestionPoolAnswerDto {
