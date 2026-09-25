@@ -20,6 +20,7 @@ import {
   ReadNewGameDto,
   QuestionPoolDto,
   QuestionPoolAnswerDto,
+  AnswerResultDto,
 } from './dto/game.dto';
 import { ReadGameStatsDto } from './dto/game-stats.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -70,6 +71,7 @@ export class GamesService {
       ),
       enemy: isDifficultyChange ? (game?.enemyNavigation ?? null) : null,
       enemyLives: game?.enemyLives,
+      playerLives: game?.playerLives,
     };
   }
 
@@ -198,17 +200,23 @@ export class GamesService {
         'The current question has not been answered',
       );
     }
-    if (currentGame.playerLives < 1) {
-      throw new BadRequestException('Player already lost the game');
+    if (
+      currentGame.gameState !== GameState.Active ||
+      currentGame.playerLives < 1
+    ) {
+      throw new BadRequestException('The game is no longer active');
     }
 
     let isDifficultyChange = false;
-    console.log('Enemy lives:', currentGame.enemyLives);
     if (currentGame.enemyLives <= 0) {
-      console.log('current difficulty to search', currentGame.difficulty + 1);
-      const newEnemy = await this.enemyRepo.findOne({
-        where: { difficulty: currentGame.difficulty + 1 },
-      });
+      // Past the hardest enemy, a fresh one of the same difficulty appears.
+      const newEnemy =
+        (await this.enemyRepo.findOne({
+          where: { difficulty: currentGame.difficulty + 1 },
+        })) ??
+        (await this.enemyRepo.findOne({
+          where: { difficulty: currentGame.difficulty },
+        }));
 
       if (newEnemy && newEnemy.baseHealth && newEnemy.difficulty) {
         currentGame.enemyNavigation = newEnemy;
@@ -286,7 +294,7 @@ export class GamesService {
     gameId: string,
     answerId: string,
     userId: string,
-  ): Promise<boolean> {
+  ): Promise<AnswerResultDto> {
     const answer = await this.answerRepo.findOne({
       where: { id: answerId },
     });
@@ -312,8 +320,18 @@ export class GamesService {
     if (!game) {
       throw new NotFoundException(`Could not find game with id ${gameId}`);
     }
-    if (game.playerLives < 1) {
-      throw new BadRequestException('Player already lost the game');
+    if (game.gameState !== GameState.Active || game.playerLives < 1) {
+      throw new BadRequestException('The game is no longer active');
+    }
+    if (game.isCurrentQuestionAnswered) {
+      throw new BadRequestException(
+        'The current question has already been answered',
+      );
+    }
+    if (answer.questionId !== game.currentQuestionId) {
+      throw new BadRequestException(
+        'The answer does not belong to the current question',
+      );
     }
 
     // Check for timeout (1 second buffer)
@@ -330,38 +348,37 @@ export class GamesService {
       throw new NotFoundException('Game stats not found');
     }
 
-    if (!answer.isCorrect || isTimeout) {
-      game.playerLives -= game.enemyNavigation.baseAttack;
-      stats.wrongAnswers += 1;
+    const correct = !isTimeout && (answer.isCorrect ?? false);
 
-      if (stats.correctAnswersStreak > stats.correctAnswersStreakMax) {
-        stats.correctAnswersStreakMax = stats.correctAnswersStreak;
-      }
-
-      stats.correctAnswersStreak = 0;
-
-      if (game.playerLives < 1) {
-        await this.finishGame(game);
-      }
-    } else {
+    if (correct) {
       stats.xpGained = stats.xpGained + 75;
       stats.correctAnswers += 1;
       stats.correctAnswersStreak += 1;
 
       game.enemyLives =
         game.enemyLives - (player?.heroNavigation?.baseAttack ?? 1);
+    } else {
+      await this.applyWrongAnswer(game, stats);
     }
 
     await this.gameStatsRepo.save(stats);
     await this.gameRepo.save(game);
 
-    return isTimeout ? false : (answer.isCorrect ?? false);
+    return this.toAnswerResult(game, correct);
   }
 
-  async timeoutQuestion(gameId: string, userId: string): Promise<boolean> {
+  /**
+   * Resolves the current question as a wrong answer because the time ran out.
+   * Returns null if the question was already answered (the answer and the
+   * timer raced), in which case nothing is changed.
+   */
+  async timeoutQuestion(
+    gameId: string,
+    userId: string,
+  ): Promise<AnswerResultDto | null> {
     const currentGame = await this.gameRepo.findOne({
       where: { id: gameId },
-      relations: ['gameStats'],
+      relations: ['gameStats', 'enemyNavigation'],
     });
 
     if (!currentGame || !currentGame.gameStats) {
@@ -374,31 +391,62 @@ export class GamesService {
       );
     }
 
-    currentGame.isCurrentQuestionAnswered = true;
-
     if (
-      currentGame.gameStats.correctAnswersStreak >
-      currentGame.gameStats.correctAnswersStreakMax
+      currentGame.isCurrentQuestionAnswered ||
+      currentGame.gameState !== GameState.Active
     ) {
-      currentGame.gameStats.correctAnswersStreakMax =
-        currentGame.gameStats.correctAnswersStreak;
+      return null;
     }
 
-    currentGame.gameStats.correctAnswersStreak = 0;
-
-    if (currentGame.playerLives < 2) {
-      await this.finishGame(currentGame);
-      await this.gameStatsRepo.save(currentGame.gameStats);
-      await this.gameRepo.save(currentGame);
-      return true;
-    }
-
-    currentGame.playerLives -= 1;
+    currentGame.isCurrentQuestionAnswered = true;
+    await this.applyWrongAnswer(currentGame, currentGame.gameStats);
 
     await this.gameStatsRepo.save(currentGame.gameStats);
     await this.gameRepo.save(currentGame);
 
-    return true;
+    return this.toAnswerResult(currentGame, false);
+  }
+
+  /** Restarts the answer window of the current question from `startedAt`. */
+  async markQuestionStarted(
+    gameId: string,
+    userId: string,
+    startedAt: Date,
+  ): Promise<void> {
+    await this.gameRepo.update(
+      {
+        id: gameId,
+        playerId: userId,
+        isCurrentQuestionAnswered: false,
+        gameState: GameState.Active,
+      },
+      { currentQuestionTimestamp: startedAt },
+    );
+  }
+
+  private async applyWrongAnswer(game: Game, stats: GameStats): Promise<void> {
+    game.playerLives -= game.enemyNavigation?.baseAttack ?? 1;
+    stats.wrongAnswers += 1;
+
+    if (stats.correctAnswersStreak > stats.correctAnswersStreakMax) {
+      stats.correctAnswersStreakMax = stats.correctAnswersStreak;
+    }
+
+    stats.correctAnswersStreak = 0;
+
+    if (game.playerLives < 1) {
+      game.playerLives = 0;
+      await this.finishGame(game);
+    }
+  }
+
+  private toAnswerResult(game: Game, correct: boolean): AnswerResultDto {
+    return {
+      correct,
+      playerLives: game.playerLives,
+      enemyLives: game.enemyLives,
+      gameOver: game.gameState === GameState.Finished,
+    };
   }
 
   async getGameStats(
@@ -450,11 +498,13 @@ export class GamesService {
 
     while (xpGained > 0) {
       const neededXp = playerCurrentLevel.neededXp ?? 0;
-      if (xpGained >= neededXp - currentPlayerXp) {
+      const nextLevel =
+        xpGained >= neededXp - currentPlayerXp
+          ? await this.levelRepo.findOne({ where: { lvl: player.lvl + 1 } })
+          : null;
+
+      if (nextLevel) {
         xpGained -= neededXp - currentPlayerXp;
-        const nextLevel = await this.levelRepo.findOneOrFail({
-          where: { lvl: player.lvl + 1 },
-        });
         player.lvl = nextLevel.lvl;
         player.xp = 0;
         currentPlayerXp = 0;

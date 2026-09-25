@@ -1,16 +1,21 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
 import { passportJwtSecret } from 'jwks-rsa';
 import { ConfigService } from '@nestjs/config';
+import {
+  AuthTokenPayload,
+  getJwtSettings,
+  getTokenSubject,
+  JwtSettings,
+} from './jwt-config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  private readonly logger = new Logger(JwtStrategy.name);
+  private readonly settings: JwtSettings;
 
   constructor(configService: ConfigService) {
-    const issuer = configService.get<string>('JWT_ISSUER')!;
-    const jwksUri = configService.get<string>('JWKS_URI')!;
+    const settings = getJwtSettings(configService);
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -19,18 +24,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         cache: true,
         rateLimit: true,
         jwksRequestsPerMinute: 10,
-        jwksUri,
+        jwksUri: settings.jwksUri,
       }),
-      issuer,
-      audience: configService.get<string>('JWT_AUDIENCE', 'authenticated'),
-      algorithms: ['ES256'],
+      issuer: settings.issuer,
+      audience: settings.audience,
+      algorithms: settings.algorithms,
     });
+    this.settings = settings;
   }
 
-  validate(payload: any) {
-    if (!payload?.sub) {
-      throw new UnauthorizedException('Invalid token payload');
+  validate(payload: AuthTokenPayload) {
+    try {
+      return { ...payload, sub: getTokenSubject(payload, this.settings) };
+    } catch (err) {
+      throw new UnauthorizedException((err as Error).message);
     }
-    return { sub: payload.sub, email: payload.email, ...payload };
   }
 }

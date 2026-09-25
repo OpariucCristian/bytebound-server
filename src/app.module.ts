@@ -7,6 +7,9 @@ import { PlayersModule } from './players/players.module';
 import { LevelsModule } from './levels/levels.module';
 import { QuestionsModule } from './questions/questions.module';
 import { GamesModule } from './games/games.module';
+import { buildDataSourceOptions } from './db/data-source-options';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -15,15 +18,20 @@ import { GamesModule } from './games/games.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST'),
-        port: config.get<number>('DB_PORT', 5432),
-        username: config.get<string>('DB_USERNAME'),
-        password: config.get<string>('DB_PASSWORD'),
-        database: config.get<string>('DB_NAME'),
+        ...buildDataSourceOptions({
+          DATABASE_URL: config.get<string>('DATABASE_URL'),
+          DB_HOST: config.get<string>('DB_HOST'),
+          DB_PORT: config.get<string>('DB_PORT'),
+          DB_USERNAME: config.get<string>('DB_USERNAME'),
+          DB_PASSWORD: config.get<string>('DB_PASSWORD'),
+          DB_NAME: config.get<string>('DB_NAME'),
+          DB_SSL: config.get<string>('DB_SSL'),
+        }),
+        // Entities come from each module's forFeature; migrations run in
+        // db/setup.ts before the app starts.
+        entities: [],
+        migrations: [],
         autoLoadEntities: true,
-        synchronize: false,
-        ssl: { rejectUnauthorized: false },
       }),
     }),
     AuthModule,
@@ -33,5 +41,8 @@ import { GamesModule } from './games/games.module';
     QuestionsModule,
     GamesModule,
   ],
+  // GET / doubles as the health check
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

@@ -26,7 +26,7 @@ export class Hero {
   @Column({ name: 'description', type: 'text' })
   description: string | null;
 
-  @Column({ name: 'sprite_key', type: 'uuid' })
+  @Column({ name: 'sprite_key', type: 'text' })
   spriteKey: string | null;
 
   @OneToMany(() => Player, (p) => p.heroNavigation)

@@ -1,0 +1,22 @@
+# Render Blueprint: New > Blueprint > pick this repo.
+# Secrets marked `sync: false` are asked for when the Blueprint is created.
+services:
+  - type: web
+    name: bytebound-server
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm ci && npm run build
+    # Runs migrations + seeds empty tables, then starts the server
+    startCommand: npm run start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ISSUER
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

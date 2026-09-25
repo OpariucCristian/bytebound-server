@@ -55,7 +55,7 @@ export class Game {
   enemyLives: number;
 
   @Column({ name: 'gameState', type: 'int', default: GameState.Active })
-  gameState: number;
+  gameState: GameState;
 
   @Column({ name: 'xpGained', type: 'int', default: 0 })
   xpGained: number;

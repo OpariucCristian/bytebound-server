@@ -25,7 +25,7 @@ export class Enemy {
   @Column({ name: 'difficulty', type: 'int' })
   difficulty: number | null;
 
-  @Column({ name: 'sprite_key', type: 'uuid' })
+  @Column({ name: 'sprite_key', type: 'text' })
   spriteKey: string | null;
 
   @OneToMany(() => Game, (g) => g.enemyNavigation)

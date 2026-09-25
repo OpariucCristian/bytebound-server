@@ -19,7 +19,6 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { GamesService } from './games.service';
-import { CreateNewGameDto, ReadNewGameDto } from './dto/game.dto';
 import { ReadGameStatsDto } from './dto/game-stats.dto';
 import type { Request } from 'express';
 import { Game } from './entities/game.entity';
@@ -30,111 +29,6 @@ import { getUserIdFromToken } from 'src/utils/utils';
 @Controller('api/games')
 export class GamesController {
   constructor(private readonly gamesService: GamesService) {}
-
-  // POST: api/games/gameInstance/new
-  @Post('gameInstance/new')
-  @UseGuards(AuthGuard('jwt'))
-  async startNewGame(
-    @Body() dto: CreateNewGameDto,
-    @Req() req: Request,
-  ): Promise<ReadNewGameDto> {
-    try {
-      const userId = getUserIdFromToken(req);
-      if (!userId) {
-        throw new UnauthorizedException('User ID not found in claims');
-      }
-
-      return await this.gamesService.startNewGame(dto, userId);
-    } catch (err) {
-      if (
-        err instanceof UnauthorizedException ||
-        err instanceof NotFoundException
-      )
-        throw err;
-      if (err instanceof BadRequestException) throw err;
-      throw new InternalServerErrorException(
-        'An error occurred while starting a new game',
-      );
-    }
-  }
-
-  // GET: api/games/gameInstance/nextQuestion/:gameId
-  @Get('gameInstance/nextQuestion/:gameId')
-  async getNextQuestion(
-    @Param('gameId', ParseUUIDPipe) gameId: string,
-    @Req() req: Request,
-  ) {
-    try {
-      const userId = getUserIdFromToken(req);
-
-      if (!userId) {
-        throw new UnauthorizedException('Player not found');
-      }
-
-      return await this.gamesService.getNextQuestion(gameId, userId);
-    } catch (err) {
-      if (
-        err instanceof NotFoundException ||
-        err instanceof BadRequestException
-      )
-        throw err;
-      throw new InternalServerErrorException(
-        'An error occurred while fetching the next question',
-      );
-    }
-  }
-
-  // POST: api/games/gameInstance/checkAnswer/:gameId
-  @Post('gameInstance/checkAnswer/:gameId')
-  async checkAnswer(
-    @Param('gameId', ParseUUIDPipe) gameId: string,
-    @Body() body: { answerId: string },
-    @Req() req: Request,
-  ): Promise<boolean> {
-    try {
-      const userId = getUserIdFromToken(req);
-
-      if (!userId) {
-        throw new UnauthorizedException('Player not found');
-      }
-
-      return await this.gamesService.checkAnswer(gameId, body.answerId, userId);
-    } catch (err) {
-      if (
-        err instanceof NotFoundException ||
-        err instanceof BadRequestException
-      )
-        throw err;
-      throw new InternalServerErrorException(
-        'An error occurred while checking the answer',
-      );
-    }
-  }
-
-  // POST: api/games/gameInstance/timeoutQuestion/:gameId
-  @Post('gameInstance/timeoutQuestion/:gameId')
-  async timeoutQuestion(
-    @Param('gameId', ParseUUIDPipe) gameId: string,
-    @Req() req: Request,
-  ): Promise<boolean> {
-    try {
-      const userId = getUserIdFromToken(req);
-
-      if (!userId) {
-        throw new UnauthorizedException('Player not found');
-      }
-      return await this.gamesService.timeoutQuestion(gameId, userId);
-    } catch (err) {
-      if (
-        err instanceof NotFoundException ||
-        err instanceof BadRequestException
-      )
-        throw err;
-      throw new InternalServerErrorException(
-        'An error occurred while timing out the question',
-      );
-    }
-  }
 
   // GET: api/games/gameInstance/stats/:gameId
   @Get('gameInstance/stats/:gameId')

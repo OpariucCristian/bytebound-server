@@ -10,6 +10,7 @@ import { Level } from '../levels/entities/level.entity';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
+import { GamesGateway } from './games.gateway';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { Enemy } from 'src/enemies/entities/enemy.entity';
     ]),
   ],
   controllers: [GamesController],
-  providers: [GamesService],
+  providers: [GamesService, GamesGateway],
   exports: [GamesService],
 })
 export class GamesModule {}

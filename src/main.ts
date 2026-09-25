@@ -1,7 +1,25 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { INestApplicationContext, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { ServerOptions } from 'socket.io';
+
+class CorsIoAdapter extends IoAdapter {
+  constructor(
+    app: INestApplicationContext,
+    private readonly origins: string[],
+  ) {
+    super(app);
+  }
+
+  createIOServer(port: number, options?: ServerOptions): unknown {
+    return super.createIOServer(port, {
+      ...options,
+      cors: { origin: this.origins, credentials: true },
+    });
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -20,6 +38,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // WebSockets (game sessions)
+  app.useWebSocketAdapter(new CorsIoAdapter(app, origins));
+
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
-bootstrap();
+void bootstrap();

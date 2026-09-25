@@ -51,13 +51,10 @@ export class PlayersController {
       }
       let player = await this.playersService.getPlayerByUid(userId);
       if (!player) {
-        const userName = getUserNameFromToken(req);
-
-        if (!userName) {
-          throw new InternalServerErrorException(
-            'An error occurred while retrieving the player',
-          );
-        }
+        // Without a username claim, fall back to a generated name rather
+        // than locking the user out.
+        const userName =
+          getUserNameFromToken(req) ?? `player-${userId.slice(-6)}`;
 
         player = await this.playersService.createPlayer(userId, userName);
       }

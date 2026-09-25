@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { IsOptional, IsNumber } from 'class-validator';
 import { Hero } from 'src/heroes/entities/hero.entity';
 

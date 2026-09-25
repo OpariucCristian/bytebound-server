@@ -1,5 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-import { IsOptional, IsString, IsNumber } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsUUID,
+  IsDate,
+  IsArray,
+  ValidateNested,
+  IsBoolean,
+  IsInt,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
 
 export class CreateNewGameDto {
@@ -16,36 +26,109 @@ export class CreateNewGameDto {
   difficulty?: number;
 }
 
-export class ReadNewGameDto {
-  id: string;
-  type: string;
-  category: string;
-  currentQuestionId: string | null;
-  difficulty: number;
-  gameState: number;
-  playerId: string;
-  firstQuestion: QuestionPoolDto;
-  playerLives: number;
-  enemyLives: number;
-  enemy: Enemy;
+export class QuestionPoolAnswerDto {
+  @IsUUID()
+  id!: string;
+
+  @IsOptional()
+  @IsString()
+  text!: string | null;
+  // IsCorrect is intentionally excluded
 }
 
 export class QuestionPoolDto {
-  id: string;
-  createdAt: Date;
-  text: string | null;
-  category: string | null;
-  difficulty: number | null;
+  @IsUUID()
+  id!: string;
+
+  @IsDate()
+  @Type(() => Date)
+  createdAt!: Date;
+
+  @IsOptional()
+  @IsString()
+  text!: string | null;
+
+  @IsOptional()
+  @IsString()
+  category!: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  difficulty!: number | null;
+
+  @IsOptional()
+  @IsInt()
   questionSeconds?: number;
+
+  @IsOptional()
+  @IsBoolean()
   isDifficultyChange?: boolean;
-  answers: QuestionPoolAnswerDto[];
-  enemy: Enemy | null;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QuestionPoolAnswerDto)
+  answers!: QuestionPoolAnswerDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => Enemy)
+  enemy!: Enemy | null;
+
+  @IsOptional()
+  @IsNumber()
   enemyLives?: number;
+
+  @IsOptional()
+  @IsNumber()
   playerLives?: number;
 }
 
-export class QuestionPoolAnswerDto {
-  id: string;
-  text: string | null;
-  // IsCorrect is intentionally excluded
+export class ReadNewGameDto {
+  @IsUUID()
+  id!: string;
+
+  @IsString()
+  type!: string;
+
+  @IsString()
+  category!: string;
+
+  @IsOptional()
+  @IsUUID()
+  currentQuestionId!: string | null;
+
+  @IsNumber()
+  difficulty!: number;
+
+  @IsNumber()
+  gameState!: number;
+
+  @IsUUID()
+  playerId!: string;
+
+  @ValidateNested()
+  @Type(() => QuestionPoolDto)
+  firstQuestion!: QuestionPoolDto;
+
+  @IsNumber()
+  playerLives!: number;
+
+  @IsNumber()
+  enemyLives!: number;
+
+  @ValidateNested()
+  @Type(() => Enemy)
+  enemy!: Enemy;
+}
+
+export class SubmitAnswerDto {
+  @IsUUID()
+  answerId!: string;
+}
+
+export class AnswerResultDto {
+  correct!: boolean;
+  playerLives!: number;
+  enemyLives!: number;
+  gameOver!: boolean;
 }
