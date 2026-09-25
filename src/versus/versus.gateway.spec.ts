@@ -160,10 +160,13 @@ describe('VersusGateway', () => {
 
     const [roundA, roundB] = await Promise.all([aliceRound, bobRound]);
     expect(roundA).toEqual(roundB);
-    expect(roundA.question.answers).toEqual([
-      { id: RIGHT, text: 'right' },
-      { id: WRONG, text: 'wrong' },
-    ]);
+    expect(roundA.question.answers).toHaveLength(2);
+    expect(roundA.question.answers).toEqual(
+      expect.arrayContaining([
+        { id: RIGHT, text: 'right' },
+        { id: WRONG, text: 'wrong' },
+      ]),
+    );
   });
 
   it('does not match a player with themselves', async () => {

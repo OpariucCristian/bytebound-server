@@ -109,10 +109,13 @@ describe('VersusMatch', () => {
 
     const round = currentRound();
     expect(round).toMatchObject({ round: 1, difficulty: 1, seconds: 5 });
-    expect(round.question.answers).toEqual([
-      { id: expect.any(String) as unknown, text: 'right' },
-      { id: expect.any(String) as unknown, text: 'wrong' },
-    ]);
+    expect(round.question.answers).toHaveLength(2);
+    expect(round.question.answers).toEqual(
+      expect.arrayContaining([
+        { id: expect.any(String) as unknown, text: 'right' },
+        { id: expect.any(String) as unknown, text: 'wrong' },
+      ]),
+    );
     expect(pickQuestion).toHaveBeenCalledWith('dsa', 1, []);
   });
 

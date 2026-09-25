@@ -1,4 +1,5 @@
 import { SocketError } from '../common/socket-utils';
+import { shuffle } from '../utils/utils';
 import {
   DEFAULT_TIMING,
   VersusEvents,
@@ -187,7 +188,11 @@ export class VersusMatch {
       question: {
         id: question.id,
         text: question.text,
-        answers: question.answers.map((a) => ({ id: a.id, text: a.text })),
+        // Answers are stored correct-first, so shuffle them per round.
+        answers: shuffle(question.answers).map((a) => ({
+          id: a.id,
+          text: a.text,
+        })),
       },
     };
     this.deps.emit(VersusEvents.Round, payload);
