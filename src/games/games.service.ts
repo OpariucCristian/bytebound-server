@@ -13,8 +13,10 @@ import { GameStats } from './entities/game-stats.entity';
 import { QuestionPool } from '../questions/entities/question-pool.entity';
 import { QuestionPoolAnswer } from '../questions/entities/question-pool-answer.entity';
 import { Player } from '../players/entities/player.entity';
-import { Level } from '../levels/entities/level.entity';
+import { PlayersService } from '../players/players.service';
+import { QuestionsService } from '../questions/questions.service';
 import { GameState } from './enums/game-state.enum';
+import { GameMode } from './enums/game-mode.enum';
 import {
   CreateNewGameDto,
   ReadNewGameDto,
@@ -37,16 +39,14 @@ export class GamesService {
     private readonly gameQuestionRepo: Repository<GameQuestion>,
     @InjectRepository(GameStats)
     private readonly gameStatsRepo: Repository<GameStats>,
-    @InjectRepository(QuestionPool)
-    private readonly questionRepo: Repository<QuestionPool>,
     @InjectRepository(QuestionPoolAnswer)
     private readonly answerRepo: Repository<QuestionPoolAnswer>,
     @InjectRepository(Player)
     private readonly playerRepo: Repository<Player>,
-    @InjectRepository(Level)
-    private readonly levelRepo: Repository<Level>,
     @InjectRepository(Enemy)
     private readonly enemyRepo: Repository<Enemy>,
+    private readonly questionsService: QuestionsService,
+    private readonly playersService: PlayersService,
   ) {}
 
   private toQuestionDto(
@@ -96,24 +96,16 @@ export class GamesService {
       await this.gameRepo.save(runningGame);
     }
 
-    // Find available questions
-    const availableQuestions = await this.questionRepo.find({
-      where: {
-        difficulty: dto.difficulty ?? 1,
-        category: dto.category ?? 'dsa',
-      },
-      relations: ['questionPoolAnswers'],
-      take: 100,
-    });
+    const firstQuestion = await this.questionsService.pickRandom(
+      dto.category ?? 'dsa',
+      dto.difficulty ?? 1,
+    );
 
-    if (availableQuestions.length === 0) {
+    if (!firstQuestion) {
       throw new NotFoundException(
         `Could not find question with difficulty ${dto.difficulty} and category ${dto.category} to initialize the game`,
       );
     }
-
-    const randomIndex = Math.floor(Math.random() * availableQuestions.length);
-    const firstQuestion = availableQuestions[randomIndex];
 
     const firstEnemy = await this.enemyRepo.findOne({
       where: { difficulty: dto.difficulty },
@@ -129,7 +121,7 @@ export class GamesService {
 
     const newGame = this.gameRepo.create({
       id: gameId,
-      type: dto.type ?? 'endless',
+      type: dto.type ?? GameMode.Endless,
       category: dto.category ?? 'dsa',
       difficulty: dto.difficulty ?? 1,
       gameState: GameState.Active,
@@ -236,36 +228,14 @@ export class GamesService {
     });
     const askedQuestionIds = askedQuestions.map((gq) => gq.questionId);
 
-    let availableQuestions = await this.questionRepo
-      .createQueryBuilder('q')
-      .leftJoinAndSelect('q.questionPoolAnswers', 'a')
-      .where('q.difficulty = :difficulty', {
-        difficulty: currentGame.difficulty,
-      })
-      .andWhere('q.category = :category', {
-        category: currentGame.category,
-      })
-      .andWhere(
-        askedQuestionIds.length > 0 ? 'q.id NOT IN (:...askedIds)' : '1=1',
-        askedQuestionIds.length > 0 ? { askedIds: askedQuestionIds } : {},
-      )
-      .take(100)
-      .getMany();
-
-    if (availableQuestions.length === 0) {
-      // Fallback: get any question within the params (allow repeats)
-      availableQuestions = await this.questionRepo.find({
-        where: {
-          difficulty: currentGame.difficulty,
-          category: currentGame.category,
-        },
-        relations: ['questionPoolAnswers'],
-        take: 100,
-      });
+    const nextQuestion = await this.questionsService.pickRandom(
+      currentGame.category,
+      currentGame.difficulty,
+      askedQuestionIds,
+    );
+    if (!nextQuestion) {
+      throw new NotFoundException('Failed to find a question to ask');
     }
-
-    const randomIndex = Math.floor(Math.random() * availableQuestions.length);
-    const nextQuestion = availableQuestions[randomIndex];
 
     currentGame.currentQuestionId = nextQuestion.id;
     currentGame.isCurrentQuestionAnswered = false;
@@ -485,38 +455,11 @@ export class GamesService {
   }
 
   private async finishGame(game: Game): Promise<boolean> {
-    const player = await this.playerRepo.findOneOrFail({
-      where: { uid: game.playerId },
-    });
-
-    let currentPlayerXp = Number(player.xp);
-    let xpGained = game.gameStats?.xpGained ?? 0;
-
-    let playerCurrentLevel = await this.levelRepo.findOneOrFail({
-      where: { lvl: player.lvl },
-    });
-
-    while (xpGained > 0) {
-      const neededXp = playerCurrentLevel.neededXp ?? 0;
-      const nextLevel =
-        xpGained >= neededXp - currentPlayerXp
-          ? await this.levelRepo.findOne({ where: { lvl: player.lvl + 1 } })
-          : null;
-
-      if (nextLevel) {
-        xpGained -= neededXp - currentPlayerXp;
-        player.lvl = nextLevel.lvl;
-        player.xp = 0;
-        currentPlayerXp = 0;
-        playerCurrentLevel = nextLevel;
-      } else {
-        player.xp = player.xp + xpGained;
-        xpGained = 0;
-      }
-    }
-
+    await this.playersService.awardXp(
+      game.playerId,
+      game.gameStats?.xpGained ?? 0,
+    );
     game.gameState = GameState.Finished;
-    await this.playerRepo.save(player);
     return true;
   }
 }

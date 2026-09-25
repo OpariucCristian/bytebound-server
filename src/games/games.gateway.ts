@@ -1,5 +1,4 @@
-import { HttpException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -8,10 +7,6 @@ import {
   SubscribeMessage,
   WebSocketGateway,
 } from '@nestjs/websockets';
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
-import { JwksClient } from 'jwks-rsa';
-import * as jwt from 'jsonwebtoken';
 import { Namespace, Socket } from 'socket.io';
 import {
   AnswerResultDto,
@@ -21,11 +16,15 @@ import {
   SubmitAnswerDto,
 } from './dto/game.dto';
 import { GamesService } from './games.service';
+import { SocketAuthService } from '../auth/socket-auth.service';
 import {
-  getJwtSettings,
-  getTokenSubject,
-  JwtSettings,
-} from '../auth/jwt-config';
+  Ack,
+  parsePayload,
+  SocketError,
+  toSocketErrorMessage,
+} from '../common/socket-utils';
+
+export type { Ack } from '../common/socket-utils';
 
 /**
  * Socket.IO protocol for a game session (namespace `/games`).
@@ -47,11 +46,6 @@ export const GameEvents = {
   QuestionTimeout: 'game:question_timeout',
 } as const;
 
-export type Ack<T> = { ok: true; data: T } | { ok: false; error: string };
-
-/** An error whose message is safe to send to the client. */
-class GameSocketError extends Error {}
-
 /** Extra time the server allows past the countdown, to absorb latency. */
 const ANSWER_GRACE_MS = 1000;
 /** How long the client may take to show a question (intro/enemy animations). */
@@ -71,26 +65,18 @@ interface GameSession {
 @WebSocketGateway({ namespace: '/games' })
 export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
   private readonly logger = new Logger(GamesGateway.name);
-  private readonly jwksClient: JwksClient;
-  private readonly jwtSettings: JwtSettings;
 
   constructor(
-    configService: ConfigService,
+    private readonly socketAuth: SocketAuthService,
     private readonly gamesService: GamesService,
-  ) {
-    this.jwtSettings = getJwtSettings(configService);
-    this.jwksClient = new JwksClient({
-      jwksUri: this.jwtSettings.jwksUri,
-      cache: true,
-      rateLimit: true,
-    });
-  }
+  ) {}
 
   afterInit(namespace: Namespace) {
     // Authenticate during the handshake so the client gets a `connect_error`
     // instead of a silent disconnect.
     namespace.use((socket, next) => {
-      this.authenticate(socket)
+      this.socketAuth
+        .authenticate(socket)
         .then((userId) => {
           const session: GameSession = {
             userId,
@@ -268,60 +254,16 @@ export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
 
   private requireGame(session: GameSession): string {
     if (!session.gameId) {
-      throw new GameSocketError('No game is running on this connection');
+      throw new SocketError('No game is running on this connection');
     }
     return session.gameId;
   }
 
-  private async parse<T extends object>(
-    cls: new () => T,
-    body: unknown,
-  ): Promise<T> {
-    const dto = plainToInstance(cls, body ?? {});
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      const messages = errors.flatMap((e) =>
-        Object.values(e.constraints ?? {}),
-      );
-      throw new GameSocketError(`Invalid payload: ${messages.join(', ')}`);
-    }
-    return dto;
+  private parse<T extends object>(cls: new () => T, body: unknown): Promise<T> {
+    return parsePayload(cls, body);
   }
 
   private toMessage(err: unknown): string {
-    if (err instanceof HttpException || err instanceof GameSocketError) {
-      return err.message;
-    }
-    this.logger.error('Unhandled game socket error', err);
-    return 'An unexpected error occurred';
-  }
-
-  private async authenticate(socket: Socket): Promise<string> {
-    const auth = socket.handshake.auth as { token?: unknown } | undefined;
-    const token =
-      typeof auth?.token === 'string'
-        ? auth.token
-        : socket.handshake.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-      throw new Error('Missing token');
-    }
-
-    const decoded = jwt.decode(token, { complete: true });
-    if (!decoded?.header?.kid) {
-      throw new Error('Token has no key id');
-    }
-
-    const signingKey = await this.jwksClient.getSigningKey(decoded.header.kid);
-    const payload = jwt.verify(token, signingKey.getPublicKey(), {
-      issuer: this.jwtSettings.issuer,
-      audience: this.jwtSettings.audience,
-      algorithms: this.jwtSettings.algorithms,
-    });
-
-    if (typeof payload === 'string') {
-      throw new Error('Unexpected token payload');
-    }
-    return getTokenSubject(payload, this.jwtSettings);
+    return toSocketErrorMessage(err, this.logger);
   }
 }

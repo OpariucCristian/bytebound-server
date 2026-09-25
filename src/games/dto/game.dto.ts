@@ -8,14 +8,16 @@ import {
   ValidateNested,
   IsBoolean,
   IsInt,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
+import { GameMode } from '../enums/game-mode.enum';
 
 export class CreateNewGameDto {
   @IsOptional()
-  @IsString()
-  type?: string;
+  @IsIn(Object.values(GameMode))
+  type?: GameMode;
 
   @IsOptional()
   @IsString()

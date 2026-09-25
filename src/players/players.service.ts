@@ -1,8 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Player } from './entities/player.entity';
 import { Hero } from '../heroes/entities/hero.entity';
+import { Level } from '../levels/entities/level.entity';
 import { PlayerDto, UpdatePlayerDto } from './dto/player.dto';
 
 @Injectable()
@@ -96,5 +97,48 @@ export class PlayersService {
 
     await this.playerRepo.remove(player);
     return true;
+  }
+
+  /**
+   * Adds XP to a player, levelling them up as many times as it covers. Pass an
+   * entity manager to run inside a caller's transaction.
+   */
+  async awardXp(
+    uid: string,
+    xp: number,
+    manager: EntityManager = this.playerRepo.manager,
+  ): Promise<Player> {
+    const playerRepo = manager.getRepository(Player);
+    const levelRepo = manager.getRepository(Level);
+
+    const player = await playerRepo.findOneOrFail({ where: { uid } });
+
+    let currentPlayerXp = Number(player.xp);
+    let xpGained = xp;
+
+    let playerCurrentLevel = await levelRepo.findOneOrFail({
+      where: { lvl: player.lvl },
+    });
+
+    while (xpGained > 0) {
+      const neededXp = playerCurrentLevel.neededXp ?? 0;
+      const nextLevel =
+        xpGained >= neededXp - currentPlayerXp
+          ? await levelRepo.findOne({ where: { lvl: player.lvl + 1 } })
+          : null;
+
+      if (nextLevel) {
+        xpGained -= neededXp - currentPlayerXp;
+        player.lvl = nextLevel.lvl;
+        player.xp = 0;
+        currentPlayerXp = 0;
+        playerCurrentLevel = nextLevel;
+      } else {
+        player.xp = currentPlayerXp + xpGained;
+        xpGained = 0;
+      }
+    }
+
+    return playerRepo.save(player);
   }
 }

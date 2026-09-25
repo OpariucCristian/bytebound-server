@@ -7,6 +7,7 @@ import { PlayersModule } from './players/players.module';
 import { LevelsModule } from './levels/levels.module';
 import { QuestionsModule } from './questions/questions.module';
 import { GamesModule } from './games/games.module';
+import { VersusModule } from './versus/versus.module';
 import { buildDataSourceOptions } from './db/data-source-options';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -40,6 +41,7 @@ import { AppService } from './app.service';
     LevelsModule,
     QuestionsModule,
     GamesModule,
+    VersusModule,
   ],
   // GET / doubles as the health check
   controllers: [AppController],

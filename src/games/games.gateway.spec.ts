@@ -1,11 +1,11 @@
 import { INestApplication, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { Server } from 'http';
 import { AddressInfo } from 'net';
 import { io, Socket } from 'socket.io-client';
 import { Ack, GameEvents, GamesGateway } from './games.gateway';
 import { GamesService } from './games.service';
+import { SocketAuthService } from '../auth/socket-auth.service';
 
 // These pull in ESM-only packages Jest can't load. Auth and the service are
 // replaced below anyway.
@@ -32,7 +32,7 @@ describe('GamesGateway', () => {
   let app: INestApplication;
   let url: string;
   let gamesService: Record<string, jest.Mock>;
-  let authenticate: jest.SpyInstance;
+  let authenticate: jest.Mock;
   const sockets: Socket[] = [];
 
   const connect = (token = 'token'): Promise<Socket> =>
@@ -69,26 +69,13 @@ describe('GamesGateway', () => {
       getNextQuestion: jest.fn().mockResolvedValue(question()),
     };
 
-    authenticate = jest
-      .spyOn(
-        GamesGateway.prototype as unknown as {
-          authenticate: () => Promise<string>;
-        },
-        'authenticate',
-      )
-      .mockResolvedValue('user-1');
+    authenticate = jest.fn().mockResolvedValue('user-1');
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         GamesGateway,
         { provide: GamesService, useValue: gamesService },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: (_key: string, fallback?: unknown) => fallback,
-            getOrThrow: () => 'https://example.com',
-          },
-        },
+        { provide: SocketAuthService, useValue: { authenticate } },
       ],
     }).compile();
 
@@ -100,7 +87,6 @@ describe('GamesGateway', () => {
 
   afterEach(async () => {
     sockets.splice(0).forEach((s) => s.disconnect());
-    authenticate.mockRestore();
     await app.close();
   });
 

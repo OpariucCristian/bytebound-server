@@ -118,6 +118,40 @@ export class QuestionsService {
     return true;
   }
 
+  /**
+   * A random question (with its answers) of a category and difficulty,
+   * skipping `excludeIds` unless every question has already been asked.
+   */
+  async pickRandom(
+    category: string,
+    difficulty: number,
+    excludeIds: string[] = [],
+  ): Promise<QuestionPool | null> {
+    let candidates = await this.questionRepo
+      .createQueryBuilder('q')
+      .leftJoinAndSelect('q.questionPoolAnswers', 'a')
+      .where('q.difficulty = :difficulty', { difficulty })
+      .andWhere('q.category = :category', { category })
+      .andWhere(
+        excludeIds.length > 0 ? 'q.id NOT IN (:...excludeIds)' : '1=1',
+        excludeIds.length > 0 ? { excludeIds } : {},
+      )
+      .take(100)
+      .getMany();
+
+    if (candidates.length === 0 && excludeIds.length > 0) {
+      // Everything was asked already: allow repeats.
+      candidates = await this.questionRepo.find({
+        where: { difficulty, category },
+        relations: ['questionPoolAnswers'],
+        take: 100,
+      });
+    }
+
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
   async checkAnswer(
     questionId: string,
     answerId: string,
