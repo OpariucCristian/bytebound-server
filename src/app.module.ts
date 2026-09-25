@@ -43,7 +43,6 @@ import { AppService } from './app.service';
     GamesModule,
     VersusModule,
   ],
-  // GET / doubles as the health check
   controllers: [AppController],
   providers: [AppService],
 })

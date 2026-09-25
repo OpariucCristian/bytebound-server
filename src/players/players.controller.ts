@@ -16,12 +16,13 @@ import {
   Patch,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { PLAYER_AUTH } from '../auth/guest';
 import { PlayersService } from './players.service';
 import { PlayerDto, UpdatePlayerDto } from './dto/player.dto';
 import type { Request } from 'express';
 import { getUserIdFromToken, getUserNameFromToken } from 'src/utils/utils';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard(PLAYER_AUTH))
 @Controller('api/players')
 export class PlayersController {
   constructor(private readonly playersService: PlayersService) {}

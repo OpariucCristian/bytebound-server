@@ -9,12 +9,13 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
+import { PLAYER_AUTH } from '../auth/guest';
 import { getUserIdFromToken } from '../utils/utils';
 import { VersusStatsDto } from './dto/versus.dto';
 import { VersusService } from './versus.service';
 import { MatchSummary } from './versus.types';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard(PLAYER_AUTH))
 @Controller('api/versus')
 export class VersusController {
   constructor(private readonly versusService: VersusService) {}
