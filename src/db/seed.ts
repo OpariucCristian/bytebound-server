@@ -47,11 +47,11 @@ const ENEMIES: Partial<Enemy>[] = [
     spriteKey: 'enemy_imp',
   },
   {
-    name: 'Skeleton Knight',
+    name: 'Werewolf',
     difficulty: 4,
     baseHealth: 6,
     baseAttack: 2,
-    spriteKey: 'enemy_skeleton',
+    spriteKey: 'enemy_werewolf',
   },
   {
     name: 'Archdemon',
