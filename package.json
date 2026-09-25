@@ -22,6 +22,8 @@
     "migration:generate": "node --env-file-if-exists=.env node_modules/typeorm/cli.js migration:generate -d dist/db/data-source.js"
   },
   "dependencies": {
+    "@neon/config": "^1.7.3",
+    "@neon/env": "^1.4.4",
     "@nestjs/common": "^11.2.6",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.2.6",

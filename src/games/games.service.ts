@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Not, Repository } from 'typeorm';
 import { Game } from './entities/game.entity';
 import { GameQuestion } from './entities/game-question.entity';
 import { GameStats } from './entities/game-stats.entity';
@@ -25,6 +25,7 @@ import {
 import { ReadGameStatsDto } from './dto/game-stats.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
+import { GUEST_ID_PREFIX } from '../auth/guest';
 
 @Injectable()
 export class GamesService {
@@ -475,6 +476,8 @@ export class GamesService {
 
   async getScoreboard(page: number = 0): Promise<GameStats[]> {
     const scoreboard = await this.gameStatsRepo.find({
+      // Guest runs aren't ranked
+      where: { playerId: Not(Like(`${GUEST_ID_PREFIX}%`)) },
       take: 10,
       skip: page * 10,
       order: { correctAnswers: 'DESC' },

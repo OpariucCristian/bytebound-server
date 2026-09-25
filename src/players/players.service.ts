@@ -12,7 +12,31 @@ export class PlayersService {
   constructor(
     @InjectRepository(Player)
     private readonly playerRepo: Repository<Player>,
+    @InjectRepository(Hero)
+    private readonly heroRepo: Repository<Hero>,
   ) {}
+
+  /**
+   * Creates a player for a guest session. Guests skip the hero pick and start
+   * as the sturdiest hero, so a first run forgives a few wrong answers.
+   */
+  async createGuestPlayer(uid: string, userName: string): Promise<void> {
+    const hero = await this.heroRepo.findOne({
+      where: {},
+      order: { baseHealth: 'DESC', name: 'ASC' },
+    });
+
+    await this.playerRepo.save(
+      this.playerRepo.create({
+        uid,
+        lvl: 1,
+        xp: 0,
+        userName,
+        createdAt: new Date(),
+        heroNavigation: hero ?? undefined,
+      }),
+    );
+  }
 
   async getAllPlayers(): Promise<PlayerDto[]> {
     const players = await this.playerRepo.find({

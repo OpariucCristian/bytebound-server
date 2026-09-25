@@ -26,6 +26,7 @@ import {
   getTokenSubject,
   JwtSettings,
 } from '../auth/jwt-config';
+import { getGuestSecret, GUEST_ISSUER, isGuestId } from '../auth/guest';
 
 /**
  * Socket.IO protocol for a game session (namespace `/games`).
@@ -73,12 +74,14 @@ export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
   private readonly logger = new Logger(GamesGateway.name);
   private readonly jwksClient: JwksClient;
   private readonly jwtSettings: JwtSettings;
+  private readonly guestSecret: string;
 
   constructor(
     configService: ConfigService,
     private readonly gamesService: GamesService,
   ) {
     this.jwtSettings = getJwtSettings(configService);
+    this.guestSecret = getGuestSecret(configService);
     this.jwksClient = new JwksClient({
       jwksUri: this.jwtSettings.jwksUri,
       cache: true,
@@ -308,6 +311,25 @@ export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
     }
 
     const decoded = jwt.decode(token, { complete: true });
+
+    if (
+      typeof decoded?.payload === 'object' &&
+      decoded.payload.iss === GUEST_ISSUER
+    ) {
+      const payload = jwt.verify(token, this.guestSecret, {
+        issuer: GUEST_ISSUER,
+        algorithms: ['HS256'],
+      });
+      if (
+        typeof payload === 'string' ||
+        typeof payload.sub !== 'string' ||
+        !isGuestId(payload.sub)
+      ) {
+        throw new Error('Invalid guest token');
+      }
+      return payload.sub;
+    }
+
     if (!decoded?.header?.kid) {
       throw new Error('Token has no key id');
     }

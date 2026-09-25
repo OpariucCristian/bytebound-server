@@ -8,10 +8,11 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { PLAYER_AUTH } from '../auth/guest';
 import { LevelsService } from './levels.service';
 import { LevelDto } from './dto/level.dto';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard(PLAYER_AUTH))
 @Controller('api/levels')
 export class LevelsController {
   constructor(private readonly levelsService: LevelsService) {}

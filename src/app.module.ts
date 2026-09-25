@@ -41,7 +41,6 @@ import { AppService } from './app.service';
     QuestionsModule,
     GamesModule,
   ],
-  // GET / doubles as the health check
   controllers: [AppController],
   providers: [AppService],
 })

@@ -20,3 +20,6 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # Signs guest-session tokens; Render generates it once
+      - key: GUEST_JWT_SECRET
+        generateValue: true

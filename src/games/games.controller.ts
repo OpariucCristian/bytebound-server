@@ -18,6 +18,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { PLAYER_AUTH } from '../auth/guest';
 import { GamesService } from './games.service';
 import { ReadGameStatsDto } from './dto/game-stats.dto';
 import type { Request } from 'express';
@@ -25,14 +26,13 @@ import { Game } from './entities/game.entity';
 import { GameStats } from './entities/game-stats.entity';
 import { getUserIdFromToken } from 'src/utils/utils';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard(PLAYER_AUTH))
 @Controller('api/games')
 export class GamesController {
   constructor(private readonly gamesService: GamesService) {}
 
   // GET: api/games/gameInstance/stats/:gameId
   @Get('gameInstance/stats/:gameId')
-  @UseGuards(AuthGuard('jwt'))
   async getGameStats(
     @Param('gameId', ParseUUIDPipe) gameId: string,
     @Req() req: Request,
