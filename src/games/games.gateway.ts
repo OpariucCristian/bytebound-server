@@ -13,7 +13,9 @@ import {
   CreateNewGameDto,
   QuestionPoolDto,
   ReadNewGameDto,
+  RunSkillDto,
   SubmitAnswerDto,
+  UseSkillDto,
 } from './dto/game.dto';
 import { GamesService } from './games.service';
 import { SocketAuthService } from '../auth/socket-auth.service';
@@ -34,6 +36,7 @@ export type { Ack } from '../common/socket-utils';
  *   `game:question_ready` (none)           -> null   question is visible, start the clock
  *   `game:answer`         SubmitAnswerDto  -> AnswerResultDto
  *   `game:next_question`  (none)           -> QuestionPoolDto
+ *   `game:use_skill`      UseSkillDto      -> RunSkillDto[]  protect the current question
  *
  * Server -> client:
  *   `game:question_timeout` AnswerResultDto   the answer window ran out
@@ -43,6 +46,7 @@ export const GameEvents = {
   QuestionReady: 'game:question_ready',
   Answer: 'game:answer',
   NextQuestion: 'game:next_question',
+  UseSkill: 'game:use_skill',
   QuestionTimeout: 'game:question_timeout',
 } as const;
 
@@ -177,6 +181,18 @@ export class GamesGateway implements OnGatewayInit, OnGatewayDisconnect {
       );
       this.beginQuestion(client, session, question);
       return question;
+    });
+  }
+
+  @SubscribeMessage(GameEvents.UseSkill)
+  handleUseSkill(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: unknown,
+  ): Promise<Ack<RunSkillDto[]>> {
+    return this.run(client, async (session) => {
+      const gameId = this.requireGame(session);
+      const dto = await this.parse(UseSkillDto, body);
+      return this.gamesService.useSkill(gameId, dto.skillId, session.userId);
     });
   }
 

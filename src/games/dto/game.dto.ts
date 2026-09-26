@@ -121,6 +121,23 @@ export class ReadNewGameDto {
   @ValidateNested()
   @Type(() => Enemy)
   enemy!: Enemy;
+
+  skills!: RunSkillDto[];
+}
+
+/** A skill of the player's hero, with its state in the current run. */
+export class RunSkillDto {
+  id!: string;
+  key!: string;
+  name!: string | null;
+  description!: string | null;
+  unlockAtLvl!: number;
+  /** The player's level is high enough to use it. */
+  unlocked!: boolean;
+  /** Already spent this run. */
+  used!: boolean;
+  /** Protecting the current question. */
+  active!: boolean;
 }
 
 export class SubmitAnswerDto {
@@ -128,9 +145,16 @@ export class SubmitAnswerDto {
   answerId!: string;
 }
 
+export class UseSkillDto {
+  @IsUUID()
+  skillId!: string;
+}
+
 export class AnswerResultDto {
   correct!: boolean;
   playerLives!: number;
   enemyLives!: number;
   gameOver!: boolean;
+  /** A wrong answer whose damage an active skill blocked. */
+  blocked!: boolean;
 }

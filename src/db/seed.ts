@@ -1,6 +1,8 @@
 import { DataSource, EntityTarget, ObjectLiteral } from 'typeorm';
 import { Enemy } from '../enemies/entities/enemy.entity';
 import { Hero } from '../heroes/entities/hero.entity';
+import { HeroSkill } from '../heroes/entities/hero-skill.entity';
+import { SkillEffect } from '../heroes/enums/skill-effect.enum';
 import { Level } from '../levels/entities/level.entity';
 import { QuestionPool } from '../questions/entities/question-pool.entity';
 import { QuestionPoolAnswer } from '../questions/entities/question-pool-answer.entity';
@@ -20,6 +22,28 @@ const HEROES: Partial<Hero>[] = [
     baseHealth: 3,
     baseAttack: 2,
     spriteKey: 'hero_wizard',
+  },
+];
+
+// Skills per hero (matched by sprite key). Heroes unlock more as the player
+// levels up; each skill is usable once per run.
+const HERO_SKILLS: (Partial<HeroSkill> & { heroSpriteKey: string })[] = [
+  {
+    key: 'shields_up',
+    heroSpriteKey: 'hero_knight',
+    name: 'Shields Up',
+    description: 'Raise your shield: a wrong answer this turn costs no lives.',
+    effectType: SkillEffect.BlockWrongAnswerDamage,
+    unlockAtLvl: 1,
+  },
+  {
+    key: 'ice_block',
+    heroSpriteKey: 'hero_wizard',
+    name: 'Ice Block',
+    description:
+      'Encase yourself in ice: a wrong answer this turn costs no lives.',
+    effectType: SkillEffect.BlockWrongAnswerDamage,
+    unlockAtLvl: 1,
   },
 ];
 
@@ -122,9 +146,29 @@ const syncQuestions = async (dataSource: DataSource): Promise<string[]> => {
 };
 
 /**
- * Inserts the game content (heroes, enemies, levels, questions). Heroes,
- * enemies and levels are only seeded while empty; questions are synced with
- * the bank, so this is safe to run on every deploy.
+ * Upserts HERO_SKILLS by key, so edits to a skill apply on the next deploy.
+ * Skills whose hero doesn't exist are skipped.
+ */
+const syncHeroSkills = async (dataSource: DataSource): Promise<string[]> => {
+  const heroes = await dataSource
+    .getRepository(Hero)
+    .find({ select: { id: true, spriteKey: true } });
+  const heroIdBySprite = new Map(heroes.map((h) => [h.spriteKey, h.id]));
+
+  const rows = HERO_SKILLS.flatMap(({ heroSpriteKey, ...skill }) => {
+    const heroId = heroIdBySprite.get(heroSpriteKey);
+    return heroId ? [{ ...skill, heroId }] : [];
+  });
+  if (rows.length === 0) return [];
+
+  await dataSource.getRepository(HeroSkill).upsert(rows, ['key']);
+  return [`${rows.length} hero skills`];
+};
+
+/**
+ * Inserts the game content (heroes, skills, enemies, levels, questions).
+ * Heroes, enemies and levels are only seeded while empty; skills and questions
+ * are synced, so this is safe to run on every deploy.
  */
 export const seed = async (dataSource: DataSource): Promise<string[]> => {
   const seeded: string[] = [];
@@ -144,6 +188,7 @@ export const seed = async (dataSource: DataSource): Promise<string[]> => {
     seeded.push(`${LEVELS.length} levels`);
   }
 
+  seeded.push(...(await syncHeroSkills(dataSource)));
   seeded.push(...(await syncQuestions(dataSource)));
 
   return seeded;

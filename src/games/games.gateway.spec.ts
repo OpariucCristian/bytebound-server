@@ -15,6 +15,10 @@ jest.mock('./games.service', () => ({ GamesService: class {} }));
 const GAME_ID = '6f1c1c52-8d7e-4f0e-9d7a-1b2c3d4e5f60';
 const ANSWER_ID = '0b7c6a52-1d2e-4f3a-8b9c-0d1e2f3a4b5c';
 
+const SKILL_ID = '3d9a1c7e-5b2f-4e8a-9c1d-2e3f4a5b6c7d';
+
+const skill = () => ({ id: SKILL_ID, key: 'shields_up', active: true });
+
 const emit = (
   socket: Socket,
   event: string,
@@ -67,6 +71,7 @@ describe('GamesGateway', () => {
         gameOver: false,
       }),
       getNextQuestion: jest.fn().mockResolvedValue(question()),
+      useSkill: jest.fn().mockResolvedValue([skill()]),
     };
 
     authenticate = jest.fn().mockResolvedValue('user-1');
@@ -176,6 +181,20 @@ describe('GamesGateway', () => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     expect(gamesService.timeoutQuestion).not.toHaveBeenCalled();
+  });
+
+  it('uses a skill on the current question', async () => {
+    const socket = await connect();
+    await emit(socket, GameEvents.Start, {});
+
+    await expect(
+      emit(socket, GameEvents.UseSkill, { skillId: SKILL_ID }),
+    ).resolves.toEqual({ ok: true, data: [skill()] });
+    expect(gamesService.useSkill).toHaveBeenCalledWith(
+      GAME_ID,
+      SKILL_ID,
+      'user-1',
+    );
   });
 
   it('rejects answers when no game is running', async () => {

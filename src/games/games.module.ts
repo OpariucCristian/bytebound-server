@@ -9,6 +9,7 @@ import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
 import { GamesGateway } from './games.gateway';
+import { HeroSkill } from '../heroes/entities/hero-skill.entity';
 import { AuthModule } from '../auth/auth.module';
 import { PlayersModule } from '../players/players.module';
 import { QuestionsModule } from '../questions/questions.module';
@@ -22,6 +23,7 @@ import { QuestionsModule } from '../questions/questions.module';
       QuestionPoolAnswer,
       Player,
       Enemy,
+      HeroSkill,
     ]),
     AuthModule,
     PlayersModule,

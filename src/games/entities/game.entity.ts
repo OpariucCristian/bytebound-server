@@ -70,6 +70,19 @@ export class Game {
   @Column({ name: 'questionSeconds', type: 'int', default: 10 })
   questionSeconds: number;
 
+  /** Hero skills already spent this run; each skill is usable once per run. */
+  @Column({
+    name: 'used_skill_ids',
+    type: 'uuid',
+    array: true,
+    default: () => "'{}'",
+  })
+  usedSkillIds: string[];
+
+  /** The skill protecting the current question, cleared once it's resolved. */
+  @Column({ name: 'active_skill_id', type: 'uuid', nullable: true })
+  activeSkillId: string | null;
+
   @ManyToOne(() => QuestionPool, (q) => q.games, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'currentQuestionId' })
   currentQuestion: QuestionPool;

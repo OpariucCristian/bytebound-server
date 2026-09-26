@@ -23,11 +23,14 @@ import {
   QuestionPoolDto,
   QuestionPoolAnswerDto,
   AnswerResultDto,
+  RunSkillDto,
 } from './dto/game.dto';
 import { ReadGameStatsDto } from './dto/game-stats.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { Enemy } from 'src/enemies/entities/enemy.entity';
 import { GUEST_ID_PREFIX } from '../auth/guest';
+import { HeroSkill } from '../heroes/entities/hero-skill.entity';
+import { SkillEffect } from '../heroes/enums/skill-effect.enum';
 
 @Injectable()
 export class GamesService {
@@ -46,6 +49,8 @@ export class GamesService {
     private readonly playerRepo: Repository<Player>,
     @InjectRepository(Enemy)
     private readonly enemyRepo: Repository<Enemy>,
+    @InjectRepository(HeroSkill)
+    private readonly heroSkillRepo: Repository<HeroSkill>,
     private readonly questionsService: QuestionsService,
     private readonly playersService: PlayersService,
   ) {}
@@ -136,6 +141,8 @@ export class GamesService {
       enemyLives: firstEnemy.baseHealth,
       enemyNavigation: firstEnemy,
       xpGained: 0,
+      usedSkillIds: [],
+      activeSkillId: null,
     });
 
     const newStats = this.gameStatsRepo.create({
@@ -169,6 +176,7 @@ export class GamesService {
       playerLives: newGame.playerLives,
       enemyLives: newGame.enemyNavigation.baseHealth ?? 5,
       enemy: newGame.enemyNavigation,
+      skills: await this.getRunSkills(newGame, player),
     };
   }
 
@@ -240,6 +248,7 @@ export class GamesService {
 
     currentGame.currentQuestionId = nextQuestion.id;
     currentGame.isCurrentQuestionAnswered = false;
+    currentGame.activeSkillId = null;
 
     // Add time buffer for difficulty change animations
     if (isDifficultyChange) {
@@ -320,6 +329,7 @@ export class GamesService {
     }
 
     const correct = !isTimeout && (answer.isCorrect ?? false);
+    let blocked = false;
 
     if (correct) {
       stats.xpGained = stats.xpGained + 75;
@@ -329,13 +339,14 @@ export class GamesService {
       game.enemyLives =
         game.enemyLives - (player?.heroNavigation?.baseAttack ?? 1);
     } else {
-      await this.applyWrongAnswer(game, stats);
+      blocked = await this.applyWrongAnswer(game, stats);
     }
+    game.activeSkillId = null;
 
     await this.gameStatsRepo.save(stats);
     await this.gameRepo.save(game);
 
-    return this.toAnswerResult(game, correct);
+    return this.toAnswerResult(game, correct, blocked);
   }
 
   /**
@@ -370,12 +381,16 @@ export class GamesService {
     }
 
     currentGame.isCurrentQuestionAnswered = true;
-    await this.applyWrongAnswer(currentGame, currentGame.gameStats);
+    const blocked = await this.applyWrongAnswer(
+      currentGame,
+      currentGame.gameStats,
+    );
+    currentGame.activeSkillId = null;
 
     await this.gameStatsRepo.save(currentGame.gameStats);
     await this.gameRepo.save(currentGame);
 
-    return this.toAnswerResult(currentGame, false);
+    return this.toAnswerResult(currentGame, false, blocked);
   }
 
   /** Restarts the answer window of the current question from `startedAt`. */
@@ -395,8 +410,117 @@ export class GamesService {
     );
   }
 
-  private async applyWrongAnswer(game: Game, stats: GameStats): Promise<void> {
-    game.playerLives -= game.enemyNavigation?.baseAttack ?? 1;
+  /**
+   * Activates one of the hero's skills for the current question. Each skill is
+   * usable once per run, and only one can be active at a time.
+   */
+  async useSkill(
+    gameId: string,
+    skillId: string,
+    userId: string,
+  ): Promise<RunSkillDto[]> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    const player = await this.playerRepo.findOne({
+      where: { uid: userId },
+      relations: ['heroNavigation'],
+    });
+
+    if (!game) {
+      throw new NotFoundException(`Could not find game with id ${gameId}`);
+    }
+    if (game.playerId !== userId || !player) {
+      throw new UnauthorizedException(
+        "The player used a skill in a game they're not playing",
+      );
+    }
+    if (game.gameState !== GameState.Active || game.playerLives < 1) {
+      throw new BadRequestException('The game is no longer active');
+    }
+    if (game.isCurrentQuestionAnswered) {
+      throw new BadRequestException(
+        'Skills can only be used before answering the question',
+      );
+    }
+
+    const skill = await this.heroSkillRepo.findOne({ where: { id: skillId } });
+    if (!skill || skill.heroId !== player.heroNavigation?.id) {
+      throw new BadRequestException("This skill doesn't belong to your hero");
+    }
+    if (!this.isUnlocked(skill, player)) {
+      throw new BadRequestException(
+        `This skill unlocks at level ${skill.unlockAtLvl}`,
+      );
+    }
+    if (game.usedSkillIds.includes(skill.id)) {
+      throw new BadRequestException('This skill was already used this run');
+    }
+    if (game.activeSkillId) {
+      throw new BadRequestException('A skill is already active');
+    }
+
+    game.usedSkillIds = [...game.usedSkillIds, skill.id];
+    game.activeSkillId = skill.id;
+    await this.gameRepo.update(game.id, {
+      usedSkillIds: game.usedSkillIds,
+      activeSkillId: game.activeSkillId,
+    });
+
+    return this.getRunSkills(game, player);
+  }
+
+  /** The skills of the player's hero and their state in this run. */
+  private async getRunSkills(
+    game: Game,
+    player: Player,
+  ): Promise<RunSkillDto[]> {
+    const heroId = player.heroNavigation?.id;
+    if (!heroId) return [];
+
+    const skills = await this.heroSkillRepo.find({
+      where: { heroId },
+      order: { unlockAtLvl: 'ASC' },
+    });
+
+    return skills.map((s) => ({
+      id: s.id,
+      key: s.key,
+      name: s.name,
+      description: s.description,
+      unlockAtLvl: s.unlockAtLvl ?? 1,
+      unlocked: this.isUnlocked(s, player),
+      used: game.usedSkillIds.includes(s.id),
+      active: game.activeSkillId === s.id,
+    }));
+  }
+
+  private isUnlocked(skill: HeroSkill, player: Player): boolean {
+    return (skill.unlockAtLvl ?? 1) <= player.lvl;
+  }
+
+  /** The effect of the skill protecting the current question, if any. */
+  private async getActiveSkillEffect(game: Game): Promise<SkillEffect | null> {
+    if (!game.activeSkillId) return null;
+    const skill = await this.heroSkillRepo.findOne({
+      where: { id: game.activeSkillId },
+    });
+    return skill?.effectType ?? null;
+  }
+
+  /**
+   * Applies a wrong answer (or timeout) to the game. Returns true if an active
+   * skill blocked the damage; the answer still counts as wrong.
+   */
+  private async applyWrongAnswer(
+    game: Game,
+    stats: GameStats,
+  ): Promise<boolean> {
+    const blocked =
+      (await this.getActiveSkillEffect(game)) ===
+      SkillEffect.BlockWrongAnswerDamage;
+
+    if (!blocked) {
+      game.playerLives -= game.enemyNavigation?.baseAttack ?? 1;
+    }
     stats.wrongAnswers += 1;
 
     if (stats.correctAnswersStreak > stats.correctAnswersStreakMax) {
@@ -409,14 +533,21 @@ export class GamesService {
       game.playerLives = 0;
       await this.finishGame(game);
     }
+
+    return blocked;
   }
 
-  private toAnswerResult(game: Game, correct: boolean): AnswerResultDto {
+  private toAnswerResult(
+    game: Game,
+    correct: boolean,
+    blocked = false,
+  ): AnswerResultDto {
     return {
       correct,
       playerLives: game.playerLives,
       enemyLives: game.enemyLives,
       gameOver: game.gameState === GameState.Finished,
+      blocked,
     };
   }
 
